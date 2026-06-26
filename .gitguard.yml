@@ -1,6 +1,0 @@
-# Company Security Configuration Policy
-entropy_threshold: 4.0
-
-custom_patterns:
-  "Company Employee Token": "EMP-[0-9]{5}"
-  "Internal Database String": "db_conn_string:[A-Za-z0-9]+"
