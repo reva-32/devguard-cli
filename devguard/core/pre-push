@@ -1,0 +1,179 @@
+#!/usr/bin/env python
+import sys
+import re
+import os
+import subprocess
+import yaml
+import json
+import math  
+from datetime import datetime
+import getpass
+
+# Built-in baseline enterprise patterns
+SECRET_PATTERNS = {
+    "Google/AWS API Key": r"AIzaSy[A-Za-z0-9_\-]{16,}",
+    "Slack Webhook URL": r"https:\/\/hooks\.slack\.com\/services\/T[A-Z0-9_]+\/B[A-Z0-9_]+\/[A-Za-z0-9_]+",
+    "Generic Private Key Header": r"-----BEGIN [A-Z ]+ PRIVATE KEY-----",
+    "Database Connection String": r"(mongodb|postgresql|mysql|redis):\/\/[A-Za-z0-9_]+:[A-Za-z0-9_@\.]+:\d+"
+}
+
+# Default entropy threshold if not set in YAML
+ENTROPY_THRESHOLD = 4.5
+
+def load_team_policy():
+    global ENTROPY_THRESHOLD
+    policy_file = ".devguard.yml"
+    if os.path.exists(policy_file):
+        try:
+            with open(policy_file, 'r') as f:
+                config = yaml.safe_load(f)
+                if config:
+                    if "custom_patterns" in config:
+                        for rule_name, pattern in config["custom_patterns"].items():
+                            SECRET_PATTERNS[rule_name] = pattern
+                    if "entropy_threshold" in config:
+                        ENTROPY_THRESHOLD = float(config["entropy_threshold"])
+            print(f" [DevGuard] Custom team policy loaded (Entropy Threshold: {ENTROPY_THRESHOLD}).")
+        except Exception as e:
+            print(f" [DevGuard Warning] Failed to parse .devguard.yml: {e}")
+
+def calculate_entropy(text):
+    """Calculates the Shannon Entropy of a text string (0 to 8 scale)"""
+    if not text:
+        return 0
+    
+    frequencies = {}
+    for char in text:
+        frequencies[char] = frequencies.get(char, 0) + 1
+        
+    entropy = 0.0
+    length = len(text)
+    for count in frequencies.values():
+        probability = count / length
+        entropy -= probability * math.log2(probability)
+        
+    return round(entropy, 2)
+
+def get_staged_files():
+    stdin_input = sys.stdin.read().strip()
+    if not stdin_input:
+        return []
+    parts = stdin_input.split()
+    if len(parts) < 4:
+        return []
+    local_sha = parts[1]
+    remote_sha = parts[3]
+    
+    if remote_sha == "0000000000000000000000000000000000000000":
+        cmd = ["git", "log", "--name-only", "--pretty=format:", "HEAD", "--not", "--remotes"]
+    else:
+        cmd = ["git", "diff", "--name-only", f"{remote_sha}..{local_sha}"]
+        
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        files = [line.strip() for line in result.stdout.split("\n") if line.strip()]
+        return list(set(files))
+    except subprocess.CalledProcessError:
+        result = subprocess.run(["git", "ls-files"], capture_output=True, text=True, check=True)
+        return [line.strip() for line in result.stdout.split("\n") if line.strip()]
+
+def scan_file(file_path):
+    violations = []
+    if not os.path.isfile(file_path):
+        return violations
+
+    string_literal_pattern = r"['\"]([A-Za-z0-9_\-\#\!\@\$\%\^\&\*\(\)\+]{8,})['\"]"
+
+    with open(file_path, 'r', errors='ignore') as f:
+        for line_num, line in enumerate(f, 1):
+            flagged_by_regex = False
+            
+            # 1. Check Signature Matching (Regex)
+            for rule_name, pattern in SECRET_PATTERNS.items():
+                if re.search(pattern, line):
+                    violations.append({
+                        "file": file_path,
+                        "line": line_num,
+                        "rule": rule_name,
+                        "content": line.strip()
+                    })
+                    flagged_by_regex = True
+            
+            # If regex already identified a problem on this line, don't run entropy on it
+            if flagged_by_regex:
+                continue
+            
+            # 2. Check High Entropy Strings (Randomness detector)
+            matches = re.findall(string_literal_pattern, line)
+            for string_found in matches:
+                entropy_score = calculate_entropy(string_found)
+                if entropy_score >= ENTROPY_THRESHOLD:
+                    violations.append({
+                        "file": file_path,
+                        "line": line_num,
+                        "rule": f"High Entropy String Detected (Score: {entropy_score})",
+                        "content": f"[High Randomness Text Found: {string_found[:5]}...]"
+                    })
+    return violations
+
+def write_audit_logs(all_violations):
+    timestamp = datetime.now().isoformat()
+    machine_user = getpass.getuser()
+    
+    local_log_path = ".git/devguard_local_errors.log"
+    with open(local_log_path, "a") as f:
+        for issue in all_violations:
+            f.write(f"[{timestamp}] USER: {machine_user} | FILE: {issue['file']} | LINE: {issue['line']} | VIOLATION: {issue['content']}\n")
+            
+    repo_audit_path = "devguard-audit.json"
+    existing_history = []
+    if os.path.exists(repo_audit_path):
+        try:
+            with open(repo_audit_path, "r") as f:
+                existing_history = json.load(f)
+        except:
+            pass
+            
+    new_audit_entry = {
+        "timestamp": timestamp,
+        "machine_identity": machine_user,
+        "policy_violations_triggered": list(set([issue["rule"] for issue in all_violations]))
+    }
+    existing_history.append(new_audit_entry)
+    
+    with open(repo_audit_path, "w") as f:
+        json.dump(existing_history, f, indent=2)
+    subprocess.run(["git", "add", "devguard-audit.json"])
+
+def main():
+    print("[DevGuard] Scanning all modified files in this push batch...")
+    load_team_policy()
+    
+    changed_files = get_staged_files()
+    all_violations = []
+
+    for file_path in changed_files:
+        if ".git" in file_path or file_path == "devguard-audit.json":
+            continue
+        issues = scan_file(file_path)
+        all_violations.extend(issues)
+        
+    if all_violations:
+        write_audit_logs(all_violations)
+        print("\n" + "="*60)
+        print("[DEVGUARD BLOCK] Policy Violations Detected!")
+        print("="*60)
+        for issue in all_violations:
+            print(f" File:   {issue['file']}")
+            print(f" Line:   {issue['line']}")
+            print(f" Type:   {issue['rule']}")
+            print(f" Suggestion: Review policy configuration rules.\n")
+        print("Audit event logged locally and to devguard-audit.json.")
+        print("="*60)
+        sys.exit(1)
+        
+    print("[DevGuard] No secrets found. Proceeding with push.")
+    sys.exit(0)
+
+if __name__ == "__main__":
+    main()

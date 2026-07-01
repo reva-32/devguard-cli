@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "devguard-cli"
+version = "1.0.0"
+authors = [
+    { name = "Reva Kale", email = "reva.kale2005@gmail.com" }
+]
+description = "A context-aware DevSecOps tool to audit and prevent secrets leakage in local Git repositories."
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Security",
+]
+dependencies = [
+    "pyyaml>=6.0",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/reva-32/test_cybersecurity"
+
+[project.scripts]
+gitguard = "gitguard.__main__:main"
