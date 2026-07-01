@@ -140,7 +140,7 @@ Every scan appends to two files:
 ## Development
 
 ```bash
-git clone https://github.com/yourname/devguard-cli
+git clone https://github.com/reva-32/test_cybersecurity
 cd devguard-cli
 pip install -e .
 pytest tests/ -v
