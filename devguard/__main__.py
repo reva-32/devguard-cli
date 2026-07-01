@@ -87,7 +87,7 @@ custom_patterns:
 echo "[INFO] DevGuard executing automated pre-push security compliance audit..."
 
 # Execute the global scanner wrapper
-devguard scan
+python3 -m devguard scan
 
 # Capture the exit status of the scanner
 SCAN_EXIT_CODE=$?
