@@ -47,13 +47,13 @@ pip install devguard-cli
 devguard init
 
 # 2. Scan manually anytime
-devguard scan --path .
+devguard scan
 
-# 3. Filter by severity
-devguard scan --path . --min-severity HIGH
+# 3. Scan a specific targeted file or subdirectory
+devguard scan "file path"
 
-# 4. View audit history
-devguard report
+# 4. Filter by severity
+devguard scan --severity HIGH
 
 # 5. Mark a false positive as safe (by its hash)
 devguard ignore 9b55a56a4e3208b8
@@ -120,7 +120,7 @@ The allowlist stores hashes of ignored strings, not the strings themselves. Safe
 Every scan appends to two files:
 
 ```
-.gitguard/
+.devguard/
 ├── audit.log     # full detail, in .gitignore, never leaves your machine
 └── audit.report  # sanitized, committed to repo, safe for team review
 ```
@@ -140,8 +140,7 @@ Every scan appends to two files:
 ## Development
 
 ```bash
-git clone https://github.com/reva-32/test_cybersecurity
-cd devguard-cli
+git clone https://github.com/reva-32/devguard-cli
 pip install -e .
 pytest tests/ -v
 ```

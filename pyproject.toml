@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "devguard-cli"
-version = "1.0.0"
+version = "1.0.1"
 authors = [
     { name = "Reva Kale", email = "reva.kale2005@gmail.com" }
 ]
@@ -22,7 +22,9 @@ dependencies = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/reva-32/test_cybersecurity"
+Homepage = "https://github.com/reva-32/devguard-cli"
+Repository = "https://github.com/reva-32/devguard-cli"
+Issues = "https://github.com/reva-32/devguard-cli/issues"
 
 [project.scripts]
-gitguard = "gitguard.__main__:main"
+devguard = "devguard.__main__:main"

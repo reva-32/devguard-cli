@@ -62,7 +62,7 @@ def init_project():
     # 1. Create baseline configuration file safely
     policy_file = ".devguard.yml"
     if not os.path.exists(policy_file):
-        default_yaml = """# GitGuard Team Compliance Policy Configuration
+        default_yaml = """# DevGuard Team Compliance Policy Configuration
 # Adjust global thresholds and append company-specific regex constraints below.
 
 entropy_threshold: 4.0
@@ -420,7 +420,14 @@ def main():
     subparsers.add_parser("init", help="Inject active-defense pre-push hook configuration properties")
     
     scan_parser = subparsers.add_parser("scan", help="Execute deep repository analysis operations")
-    scan_parser.add_argument("--path", type=str, default=".", help="Target subdirectory path")
+    
+    # CHANGED: Made path a positional argument so you can just type: devguard scan "file.py"
+    # Set nargs="?" so it's optional and defaults to "." if you just type: devguard scan
+    scan_parser.add_argument("path", type=str, nargs="?", default=".", help="Target file or subdirectory path")
+    
+    # Alternatively, if you want it to be a flag named --file, uncomment the line below:
+    # scan_parser.add_argument("--file", type=str, dest="path", default=".", help="Target file path")
+
     scan_parser.add_argument("--severity", type=str, default="LOW", choices=["LOW", "MEDIUM", "HIGH"], help="Severity tier filter threshold")
     
     ignore_parser = subparsers.add_parser("ignore", help="Append specific threat asset hashes to policy exclusion map")
@@ -437,6 +444,7 @@ def main():
     if args.command == "init":
         init_project()
     elif args.command == "scan":
+        # Maps args.path directly into your existing scanner handler
         run_manual_scan(target_path=args.path, min_severity=args.severity)
     elif args.command == "ignore":
         ignore_finding(args.hash)
